@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=640, height=384, initial-scale=1">
+<title>Аналогов часовник</title>
+<style>
+  /* ===== ЦВЕТОВЕ ===== */
+  :root {
+    --bg: #FFFFFF;
+    --text: #000000;
+    --accent: #C8102E;
+    --blue: #0047AB;
+  }
+  html, body { margin:0; padding:0; width:640px; height:384px; overflow:hidden; background:var(--bg); cursor:none; }
+  body { font-family:"Arial Black","Segoe UI",Arial,sans-serif; font-weight:900; color:var(--text); }
+
+  .screen { width:640px; height:384px; display:flex; align-items:center; }
+  canvas { width:340px; height:340px; margin-left:10px; flex-shrink:0; }
+
+  .info { flex:1; height:340px; display:flex; flex-direction:column; justify-content:center;
+          padding-left:16px; border-left:3px solid var(--accent); margin-left:8px; }
+  .title { font-size:22px; color:var(--accent); letter-spacing:2px; }
+  .time  { font-size:76px; white-space:nowrap; line-height:1; margin:10px 0 6px; font-variant-numeric:tabular-nums; }
+  .wd    { font-size:24px; white-space:nowrap; color:var(--accent); text-transform:uppercase; }
+  .d     { font-size:22px; white-space:nowrap; color:var(--blue); }
+  .temp  { font-size:44px; margin-top:16px; }
+  .wdesc { font-size:20px; color:#555; }
+</style>
+</head>
+<body>
+  <div class="screen">
+    <canvas id="c" width="340" height="340"></canvas>
+    <div class="info">
+      <div class="title">ОБЩИНА КУБРАТ</div>
+      <div class="time" id="time">00:00</div>
+      <div class="wd" id="wd"></div>
+      <div class="d" id="d"></div>
+      <div class="temp" id="temp"></div>
+      <div class="wdesc" id="wdesc"></div>
+    </div>
+  </div>
+
+<script>
+  // ===== НАСТРОЙКИ =====
+  var SMOOTH_SECOND_HAND = true;  // плавно движение на секундната стрелка
+  var SHOW_WEATHER = true;
+  var LAT = 43.797, LON = 26.501;
+
+  var DAYS = ["неделя","понеделник","вторник","сряда","четвъртък","петък","събота"];
+  var MONTHS = ["януари","февруари","март","април","май","юни","юли","август","септември","октомври","ноември","декември"];
+
+  var cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  var R = 160, CX = 170, CY = 170;
+
+  function hand(angle, len, width, color, tail) {
+    ctx.save();
+    ctx.translate(CX, CY); ctx.rotate(angle);
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(0, tail || 0); ctx.lineTo(0, -len); ctx.stroke();
+    ctx.restore();
+  }
+
+  function draw() {
+    var t = new Date();
+    var ms = SMOOTH_SECOND_HAND ? t.getMilliseconds() : 0;
+    var s = t.getSeconds() + ms/1000, m = t.getMinutes() + s/60, h = (t.getHours()%12) + m/60;
+
+    ctx.clearRect(0,0,340,340);
+
+    // циферблат
+    ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2);
+    ctx.strokeStyle = "#000000"; ctx.lineWidth = 6; ctx.stroke();
+
+    for (var i = 0; i < 60; i++) {
+      var a = i * Math.PI / 30, big = i % 5 === 0;
+      var r1 = big ? R-30 : R-14, r2 = R-6;
+      ctx.beginPath();
+      ctx.moveTo(CX + r1*Math.sin(a), CY - r1*Math.cos(a));
+      ctx.lineTo(CX + r2*Math.sin(a), CY - r2*Math.cos(a));
+      ctx.strokeStyle = big ? "#000000" : "#AAAAAA";
+      ctx.lineWidth = big ? 7 : 2; ctx.lineCap = "round";
+      ctx.stroke();
+    }
+
+    // цифри 12, 3, 6, 9
+    ctx.fillStyle = "#000000"; ctx.font = "900 34px Arial Black, Arial";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("12", CX, CY - R + 54);
+    ctx.fillText("3",  CX + R - 50, CY);
+    ctx.fillText("6",  CX, CY + R - 50);
+    ctx.fillText("9",  CX - R + 50, CY);
+
+    hand(h * Math.PI/6, 85, 14, "#000000", 16);
+    hand(m * Math.PI/30, 125, 9, "#000000", 18);
+    hand(s * Math.PI/30, 135, 3, "#C8102E", 30);
+
+    ctx.beginPath(); ctx.arc(CX,CY,10,0,Math.PI*2); ctx.fillStyle = "#C8102E"; ctx.fill();
+
+    // текстова част
+    var hh = t.getHours(), mm = t.getMinutes();
+    document.getElementById("time").textContent = (hh<10?"0":"")+hh+":"+(mm<10?"0":"")+mm;
+    document.getElementById("wd").textContent = DAYS[t.getDay()];
+    document.getElementById("d").textContent = t.getDate()+" "+MONTHS[t.getMonth()]+" "+t.getFullYear()+" г.";
+  }
+
+  if (window.requestAnimationFrame && SMOOTH_SECOND_HAND) {
+    (function loop(){ draw(); requestAnimationFrame(loop); })();
+  } else {
+    draw(); setInterval(draw, 1000);
+  }
+
+  // кодове на времето (WMO) → описание
+  function desc(c) {
+    if (c === 0) return "Ясно";
+    if (c <= 2) return "Предимно ясно";
+    if (c === 3) return "Облачно";
+    if (c === 45 || c === 48) return "Мъгла";
+    if (c >= 51 && c <= 57) return "Ръми";
+    if (c >= 61 && c <= 67) return "Дъжд";
+    if (c >= 71 && c <= 77) return "Сняг";
+    if (c >= 80 && c <= 82) return "Превалявания";
+    if (c >= 85 && c <= 86) return "Снеговалеж";
+    if (c >= 95) return "Гръмотевици";
+    return "";
+  }
+  function loadWeather() {
+    if (!SHOW_WEATHER) return;
+    try {
+      var x = new XMLHttpRequest();
+      x.open("GET","https://api.open-meteo.com/v1/forecast?latitude="+LAT+"&longitude="+LON+"&current_weather=true",true);
+      x.onload = function(){ try {
+        var w = JSON.parse(x.responseText).current_weather;
+        document.getElementById("temp").textContent = Math.round(w.temperature)+"°C";
+        document.getElementById("wdesc").textContent = desc(w.weathercode);
+      } catch(e){} };
+      x.send();
+    } catch(e){}
+  }
+  loadWeather(); setInterval(loadWeather, 15*60*1000);
+</script>
+</body>
+</html>
